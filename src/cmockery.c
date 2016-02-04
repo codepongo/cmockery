@@ -265,6 +265,9 @@ static const ExceptionCodeInfo exception_codes[] = {
     EXCEPTION_CODE_INFO(EXCEPTION_PRIV_INSTRUCTION),
     EXCEPTION_CODE_INFO(EXCEPTION_STACK_OVERFLOW),
 };
+#if defined(UNICODE) 
+#define OutputDebugString OutputDebugStringA
+#endif 
 #endif // !_WIN32
 
 
@@ -1384,6 +1387,9 @@ void _test_free(void* const ptr, const char* file, const int line) {
     unsigned int i;
     char *block = (char*)ptr;
     MallocBlockInfo *block_info;
+	if (!ptr) {
+		return;
+	}
     _assert_true((int)ptr, "ptr", file, line);
     block_info = (MallocBlockInfo*)(block - (MALLOC_GUARD_SIZE +
                                                sizeof(*block_info)));
@@ -1765,3 +1771,43 @@ int _run_tests(const UnitTest * const tests, const size_t number_of_tests) {
     fail_if_blocks_allocated(check_point, "run_tests");
     return (int)total_failed;
 }
+
+#undef realloc
+void *_test_realloc(void *ptr,
+                   const size_t size,
+                   const char *file,
+                   const int line)
+{
+    MallocBlockInfo *block_info;
+    char *block = ptr;
+    size_t block_size = size;
+    void *new;
+
+    if (ptr == NULL) {
+        return _test_malloc(size, file, line);
+    }
+
+    if (size == 0) {
+        return NULL;
+    }
+
+    block_info = (MallocBlockInfo*)(block - (MALLOC_GUARD_SIZE +
+                                             sizeof(*block_info)));
+
+    new = _test_malloc(size, file, line);
+    if (new == NULL) {
+        return NULL;
+    }
+
+    if (block_info->size < size) {
+        block_size = block_info->size;
+    }
+
+    memcpy(new, ptr, block_size);
+
+    /* Free previous memory */
+    _test_free(ptr, file, line);
+
+    return new;
+}
+#define realloc test_realloc
